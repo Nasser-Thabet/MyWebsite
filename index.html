@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ImportantLinks</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .container {
+      display: flex;
+      gap: 30px;
+    }
+    .links, .form {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 50%;
+    }
+    ul {
+      list-style-type: none;
+      padding-left: 15px;
+    }
+    li {
+      margin: 5px 0;
+    }
+    a {
+      text-decoration: none;
+      color: #1a73e8;
+    }
+    select, input, button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    button {
+      cursor: pointer;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>ImportantLinks</h1>
+
+<div class="container">
+  <div class="links" id="links"></div>
+
+  <div class="form">
+    <h3>Add a Link</h3>
+    <input id="title" placeholder="Link title" />
+    <input id="url" placeholder="https://example.com" />
+    <select id="category">
+      <option value="Work">Work</option>
+      <option value="Personal">Personal</option>
+    </select>
+    <input id="subcategory" placeholder="Subcategory (e.g. Project1)" />
+    <button onclick="addLink()">Add Link</button>
+  </div>
+</div>
+
+<script>
+  const storageKey = "importantLinks";
+
+  function getData() {
+    return JSON.parse(localStorage.getItem(storageKey)) || {};
+  }
+
+  function saveData(data) {
+    localStorage.setItem(storageKey, JSON.stringify(data));
+  }
+
+  function addLink() {
+    const title = document.getElementById("title").value;
+    const url = document.getElementById("url").value;
+    const category = document.getElementById("category").value;
+    const sub = document.getElementById("subcategory").value;
+
+    if (!title || !url || !sub) return alert("Fill all fields");
+
+    const data = getData();
+    data[category] = data[category] || {};
+    data[category][sub] = data[category][sub] || [];
+    data[category][sub].push({ title, url });
+
+    saveData(data);
+    render();
+    document.getElementById("title").value = "";
+    document.getElementById("url").value = "";
+  }
+
+  function render() {
+    const data = getData();
+    const container = document.getElementById("links");
+    container.innerHTML = "";
+
+    for (const cat in data) {
+      const h2 = document.createElement("h2");
+      h2.textContent = cat;
+      container.appendChild(h2);
+
+      for (const sub in data[cat]) {
+        const h3 = document.createElement("h3");
+        h3.textContent = sub;
+        container.appendChild(h3);
+
+        const ul = document.createElement("ul");
+        data[cat][sub].forEach(l => {
+          const li = document.createElement("li");
+          li.innerHTML = `<a href="${l.url}" target="_blank">${l.title}</a>`;
+          ul.appendChild(li);
+        });
+        container.appendChild(ul);
+      }
+    }
+  }
+
+  render();
+</script>
+
+</body>
+</html>
+``
