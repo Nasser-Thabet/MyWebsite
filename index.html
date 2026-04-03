@@ -4,31 +4,19 @@
 <meta charset="UTF-8">
 <title>ImportantLinks</title>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f7f7f7;
-  margin: 20px;
-}
-h1 { text-align: center; }
-.container { display: flex; gap: 20px; }
-.links, .form {
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  width: 50%;
-}
-ul { list-style: none; padding-left: 15px; }
-li { margin: 6px 0; }
-a { color: #1a73e8; text-decoration: none; }
-button { margin-left: 6px; cursor: pointer; }
-input, select {
-  width: 100%;
-  padding: 6px;
-  margin-top: 6px;
-}
-.search { margin-bottom: 10px; }
-#error { color: red; margin-bottom: 10px; }
+body { font-family: Arial; background:#f7f7f7; margin:20px; }
+.container { display:flex; gap:20px; }
+.links,.form { background:white; padding:15px; border-radius:8px; width:50%; }
+ul { list-style:none; padding-left:15px; }
+li { margin:6px 0; }
+a { color:#1a73e8; text-decoration:none; }
+button { margin-left:6px; cursor:pointer; }
+input,select { width:100%; padding:6px; margin-top:6px; }
+.search { margin-bottom:10px; }
+#error { color:red; margin-bottom:10px; }
 </style>
 </head>
 
@@ -52,7 +40,7 @@ input, select {
       <option>Personal</option>
     </select>
     <input id="subcategory" placeholder="Subcategory">
-    <input type="hidden" id="editKey">
+    <input type="hidden" id="editId">
     <button onclick="saveLink()">Save</button>
   </div>
 </div>
@@ -60,146 +48,112 @@ input, select {
 <script>
 /************ CONFIG ************/
 const SITE_PASSWORD = "nasser123";
-
-const API_URL =
-  "https://api.github.com/repos/nasser-thabet/mywebsite-data/contents/links.json";
+const SUPABASE_URL = " https://owvbotnkzekyotgzcbxs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_X1s0toNlANVtRWxXHQt1xA_Wh_DRut4";
 /********************************/
 
 const errorBox = document.getElementById("error");
+const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /************ PASSWORD LOCK ************/
 (function () {
-  if (sessionStorage.getItem("unlocked") === "1") return;
-  const p = prompt("Enter password:");
-  if (p !== SITE_PASSWORD) {
-    errorBox.textContent = "Access denied: wrong password.";
-    throw new Error("Access denied");
+  if (sessionStorage.getItem("ok")==="1") return;
+  if (prompt("Password:") !== SITE_PASSWORD) {
+    errorBox.textContent = "Access denied.";
+    throw new Error("Denied");
   }
-  sessionStorage.setItem("unlocked", "1");
+  sessionStorage.setItem("ok","1");
 })();
 /*************************************/
 
-let data = {};
-let sha = "";
+let allLinks = [];
 
 /************ LOAD ************/
-async function loadData() {
-  try {
-    const r = await fetch(API_URL);
-    if (!r.ok) throw new Error(await r.text());
-    const j = await r.json();
-    sha = j.sha;
-    data = JSON.parse(atob(j.content));
-    render();
-  } catch (e) {
-    errorBox.textContent = "Failed to load data from GitHub.";
-    console.error(e);
+async function loadLinks() {
+  const { data, error } = await supabase
+    .from("links")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    errorBox.textContent = error.message;
+    return;
   }
+  allLinks = data;
+  render();
 }
 
 /************ SAVE ************/
-async function saveData() {
-  try {
-    const r = await fetch(API_URL, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: "Update ImportantLinks",
-        content: btoa(
-          unescape(encodeURIComponent(JSON.stringify(data, null, 2)))
-        ),
-        sha: sha
-      })
-    });
+async function saveLink() {
+  const t=title.value.trim(), u=url.value.trim(), s=subcategory.value.trim();
+  const c=category.value;
 
-    if (!r.ok) throw new Error(await r.text());
-    const j = await r.json();
-    sha = j.content.sha;
-  } catch (e) {
-    errorBox.textContent = "Save failed. See console.";
-    console.error(e);
+  if (!t || !u || !s) return alert("Fill all fields");
+
+  if (editId.value) {
+    await supabase.from("links").update({
+      title:t, url:u, category:c, subcategory:s
+    }).eq("id", editId.value);
+    editId.value="";
+  } else {
+    await supabase.from("links").insert({
+      title:t, url:u, category:c, subcategory:s
+    });
   }
+
+  title.value=url.value=subcategory.value="";
+  loadLinks();
 }
 
 /************ UI ************/
-function saveLink() {
-  const t = title.value.trim();
-  const u = url.value.trim();
-  const s = subcategory.value.trim();
-  const c = category.value;
-
-  if (!t || !u || !s) {
-    alert("Fill all fields");
-    return;
-  }
-
-  data[c] ??= {};
-  data[c][s] ??= [];
-
-  if (editKey.value) {
-    const [cat, sub, i] = editKey.value.split("|");
-    data[cat][sub][i] = { title: t, url: u };
-    editKey.value = "";
-  } else {
-    data[c][s].push({ title: t, url: u });
-  }
-
-  title.value = "";
-  url.value = "";
-  subcategory.value = "";
-
-  render();   // immediate UI update
-  saveData(); // persist to GitHub
+function editLink(l) {
+  title.value=l.title;
+  url.value=l.url;
+  category.value=l.category;
+  subcategory.value=l.subcategory;
+  editId.value=l.id;
 }
 
-function editLink(cat, sub, i) {
-  const l = data[cat][sub][i];
-  title.value = l.title;
-  url.value = l.url;
-  category.value = cat;
-  subcategory.value = sub;
-  editKey.value = `${cat}|${sub}|${i}`;
-}
-
-function deleteLink(cat, sub, i) {
-  if (!confirm("Delete this link?")) return;
-  data[cat][sub].splice(i, 1);
-  render();
-  saveData();
+async function deleteLink(id) {
+  if (!confirm("Delete?")) return;
+  await supabase.from("links").delete().eq("id", id);
+  loadLinks();
 }
 
 function render() {
   const q = search.value.toLowerCase();
   links.innerHTML = "";
 
-  for (const cat in data) {
-    for (const sub in data[cat]) {
-      const matches = data[cat][sub].filter(
-        l =>
-          l.title.toLowerCase().includes(q) ||
-          l.url.toLowerCase().includes(q)
-      );
+  const grouped = {};
+  allLinks.forEach(l => {
+    if (
+      !l.title.toLowerCase().includes(q) &&
+      !l.url.toLowerCase().includes(q)
+    ) return;
 
-      if (!matches.length) continue;
+    grouped[l.category] ??= {};
+    grouped[l.category][l.subcategory] ??= [];
+    grouped[l.category][l.subcategory].push(l);
+  });
 
+  for (const cat in grouped) {
+    for (const sub in grouped[cat]) {
       links.innerHTML += `<h3>${cat} / ${sub}</h3><ul>`;
-      matches.forEach((l, i) => {
+      grouped[cat][sub].forEach(l => {
         links.innerHTML += `
           <li>
             <a href="${l.url}" target="_blank">${l.title}</a>
-            <button onclick="editLink('${cat}','${sub}',${i})">✏️</button>
-            <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
-          </li>
-        `;
+            <button onclick='editLink(${JSON.stringify(l)})'>✏️</button>
+            <button onclick='deleteLink("${l.id}")'>🗑</button>
+          </li>`;
       });
       links.innerHTML += "</ul>";
     }
   }
 }
 
-loadData();
+loadLinks();
 </script>
 
 </body>
 </html>
-``
