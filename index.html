@@ -3,19 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <title>ImportantLinks</title>
+
 <style>
-body{font-family:Arial;background:#f7f7f7;margin:20px}
-.container{display:flex;gap:20px}
-.links,.form{background:white;padding:15px;border-radius:8px;width:50%}
-ul{list-style:none;padding-left:15px}
-li{margin:6px 0}
-a{color:#1a73e8;text-decoration:none}
-button{margin-left:6px;cursor:pointer}
-input,select{width:100%;padding:6px;margin-top:6px}
-.search{margin-bottom:10px}
-#error{color:red;margin-bottom:10px}
+body {
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  margin: 20px;
+}
+h1 { text-align: center; }
+.container { display: flex; gap: 20px; }
+.links, .form {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  width: 50%;
+}
+ul { list-style: none; padding-left: 15px; }
+li { margin: 6px 0; }
+a { color: #1a73e8; text-decoration: none; }
+button { margin-left: 6px; cursor: pointer; }
+input, select {
+  width: 100%;
+  padding: 6px;
+  margin-top: 6px;
+}
+.search { margin-bottom: 10px; }
+#error { color: red; margin-bottom: 10px; }
 </style>
 </head>
+
 <body>
 
 <h1>ImportantLinks</h1>
@@ -42,27 +58,26 @@ input,select{width:100%;padding:6px;margin-top:6px}
 </div>
 
 <script>
-/************ CONFIG (CHANGE THESE) ************/
+/************ CONFIG ************/
 const SITE_PASSWORD = "nasser123";
-const GITHUB_TOKEN = "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";
-const OWNER = "nasser-thabet";
-const REPO = "mywebsite-data";
-const FILE = "links.json";
-/*********************************************/
+
+const API_URL =
+  "https://api.github.com/repos/nasser-thabet/mywebsite-data/contents/links.json";
+/********************************/
 
 const errorBox = document.getElementById("error");
 
-/************ PASSWORD ************/
-(function(){
-  if (sessionStorage.getItem("unlocked")==="1") return;
-  const p = prompt("Password:");
+/************ PASSWORD LOCK ************/
+(function () {
+  if (sessionStorage.getItem("unlocked") === "1") return;
+  const p = prompt("Enter password:");
   if (p !== SITE_PASSWORD) {
     errorBox.textContent = "Access denied: wrong password.";
-    return;
+    throw new Error("Access denied");
   }
-  sessionStorage.setItem("unlocked","1");
+  sessionStorage.setItem("unlocked", "1");
 })();
-/*********************************/
+/*************************************/
 
 let data = {};
 let sha = "";
@@ -70,13 +85,8 @@ let sha = "";
 /************ LOAD ************/
 async function loadData() {
   try {
-    const r = await fetch(
-      `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
-      { headers:{ Authorization:`token ${GITHUB_TOKEN}` } }
-    );
-
+    const r = await fetch(API_URL);
     if (!r.ok) throw new Error(await r.text());
-
     const j = await r.json();
     sha = j.sha;
     data = JSON.parse(atob(j.content));
@@ -90,94 +100,106 @@ async function loadData() {
 /************ SAVE ************/
 async function saveData() {
   try {
-    const r = await fetch(
-      `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
-      {
-        method:"PUT",
-        headers:{
-          Authorization:`token ${GITHUB_TOKEN}`,
-          "Content-Type":"application/json"
-        },
-        body:JSON.stringify({
-          message:"Update ImportantLinks",
-          content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),
-          sha
-        })
-      }
-    );
+    const r = await fetch(API_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "Update ImportantLinks",
+        content: btoa(
+          unescape(encodeURIComponent(JSON.stringify(data, null, 2)))
+        ),
+        sha: sha
+      })
+    });
 
     if (!r.ok) throw new Error(await r.text());
-
     const j = await r.json();
     sha = j.content.sha;
   } catch (e) {
-    errorBox.textContent = "Save failed. Check console.";
+    errorBox.textContent = "Save failed. See console.";
     console.error(e);
   }
 }
 
 /************ UI ************/
 function saveLink() {
-  const t=title.value.trim(), u=url.value.trim(), s=subcategory.value.trim();
-  const c=category.value;
-  if(!t||!u||!s) return alert("Fill all fields");
+  const t = title.value.trim();
+  const u = url.value.trim();
+  const s = subcategory.value.trim();
+  const c = category.value;
+
+  if (!t || !u || !s) {
+    alert("Fill all fields");
+    return;
+  }
 
   data[c] ??= {};
   data[c][s] ??= [];
 
   if (editKey.value) {
-    const [cat,sub,i]=editKey.value.split("|");
-    data[cat][sub][i]={title:t,url:u};
-    editKey.value="";
+    const [cat, sub, i] = editKey.value.split("|");
+    data[cat][sub][i] = { title: t, url: u };
+    editKey.value = "";
   } else {
-    data[c][s].push({title:t,url:u});
+    data[c][s].push({ title: t, url: u });
   }
 
-  title.value=url.value=subcategory.value="";
+  title.value = "";
+  url.value = "";
+  subcategory.value = "";
+
+  render();   // immediate UI update
+  saveData(); // persist to GitHub
+}
+
+function editLink(cat, sub, i) {
+  const l = data[cat][sub][i];
+  title.value = l.title;
+  url.value = l.url;
+  category.value = cat;
+  subcategory.value = sub;
+  editKey.value = `${cat}|${sub}|${i}`;
+}
+
+function deleteLink(cat, sub, i) {
+  if (!confirm("Delete this link?")) return;
+  data[cat][sub].splice(i, 1);
   render();
   saveData();
 }
 
-function editLink(cat,sub,i){
-  const l=data[cat][sub][i];
-  title.value=l.title;
-  url.value=l.url;
-  category.value=cat;
-  subcategory.value=sub;
-  editKey.value=`${cat}|${sub}|${i}`;
-}
+function render() {
+  const q = search.value.toLowerCase();
+  links.innerHTML = "";
 
-function deleteLink(cat,sub,i){
-  if(!confirm("Delete?")) return;
-  data[cat][sub].splice(i,1);
-  render();
-  saveData();
-}
-
-function render(){
-  const q=search.value.toLowerCase();
-  links.innerHTML="";
-  for(const cat in data){
-    for(const sub in data[cat]){
-      const m=data[cat][sub].filter(
-        l=>l.title.toLowerCase().includes(q)||l.url.toLowerCase().includes(q)
+  for (const cat in data) {
+    for (const sub in data[cat]) {
+      const matches = data[cat][sub].filter(
+        l =>
+          l.title.toLowerCase().includes(q) ||
+          l.url.toLowerCase().includes(q)
       );
-      if(!m.length) continue;
-      links.innerHTML+=`<h3>${cat} / ${sub}</h3><ul>`;
-      m.forEach((l,i)=>{
-        links.innerHTML+=`
+
+      if (!matches.length) continue;
+
+      links.innerHTML += `<h3>${cat} / ${sub}</h3><ul>`;
+      matches.forEach((l, i) => {
+        links.innerHTML += `
           <li>
             <a href="${l.url}" target="_blank">${l.title}</a>
             <button onclick="editLink('${cat}','${sub}',${i})">✏️</button>
             <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
-          </li>`;
+          </li>
+        `;
       });
-      links.innerHTML+="</ul>";
+      links.innerHTML += "</ul>";
     }
   }
 }
 
 loadData();
 </script>
+
 </body>
 </html>
+``
