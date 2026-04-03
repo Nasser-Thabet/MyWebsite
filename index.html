@@ -8,43 +8,26 @@
       font-family: Arial, sans-serif;
       background: #f7f7f7;
       margin: 20px;
+      display: none;
     }
-    h1 {
-      text-align: center;
-    }
-    .container {
-      display: flex;
-      gap: 30px;
-    }
+    h1 { text-align: center; }
+    .container { display: flex; gap: 20px; }
     .links, .form {
       background: white;
-      padding: 20px;
+      padding: 15px;
       border-radius: 8px;
       width: 50%;
     }
-    ul {
-      list-style-type: none;
-      padding-left: 15px;
-    }
-    li {
-      margin: 5px 0;
-    }
-    a {
-      text-decoration: none;
-      color: #1a73e8;
-    }
-    select, input, button {
+    ul { list-style: none; padding-left: 15px; }
+    li { margin: 6px 0; }
+    a { color: #1a73e8; text-decoration: none; }
+    button { margin-left: 6px; cursor: pointer; }
+    input, select {
       width: 100%;
-      padding: 8px;
-      margin-top: 8px;
+      padding: 6px;
+      margin-top: 6px;
     }
-    button {
-      cursor: pointer;
-      background: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 4px;
-    }
+    .search { margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -52,73 +35,113 @@
 <h1>ImportantLinks</h1>
 
 <div class="container">
-  <div class="links" id="links"></div>
+  <div class="links">
+    <input class="search" id="search" placeholder="Search links..." oninput="render()" />
+    <div id="links"></div>
+  </div>
 
   <div class="form">
-    <h3>Add a Link</h3>
+    <h3>Add / Edit Link</h3>
     <input id="title" placeholder="Link title" />
     <input id="url" placeholder="https://example.com" />
     <select id="category">
-      <option value="Work">Work</option>
-      <option value="Personal">Personal</option>
+      <option>Work</option>
+      <option>Personal</option>
     </select>
-    <input id="subcategory" placeholder="Subcategory (e.g. Project1)" />
-    <button onclick="addLink()">Add Link</button>
+    <input id="subcategory" placeholder="Subcategory" />
+    <input type="hidden" id="editIndex" />
+    <button onclick="saveLink()">Save</button>
   </div>
 </div>
 
 <script>
-  const storageKey = "importantLinks";
+  /************ PASSWORD LOCK ************/
+  const SITE_PASSWORD = "Nasser123"; // 🔒 CHANGE THIS
 
-  function getData() {
-    return JSON.parse(localStorage.getItem(storageKey)) || {};
+  if (sessionStorage.getItem("unlocked") !== "true") {
+    const pwd = prompt("Enter password:");
+    if (pwd !== SITE_PASSWORD) {
+      alert("Incorrect password");
+      document.body.innerHTML = "";
+      throw new Error("Access denied");
+    }
+    sessionStorage.setItem("unlocked", "true");
+  }
+  document.body.style.display = "block";
+  /****************************************/
+
+  const key = "importantLinks";
+
+  function load() {
+    return JSON.parse(localStorage.getItem(key)) || {};
+  }
+  function save(data) {
+    localStorage.setItem(key, JSON.stringify(data));
   }
 
-  function saveData(data) {
-    localStorage.setItem(storageKey, JSON.stringify(data));
-  }
+  function saveLink() {
+    const t = title.value.trim();
+    const u = url.value.trim();
+    const c = category.value;
+    const s = subcategory.value.trim();
+    if (!t || !u || !s) return alert("Fill all fields");
 
-  function addLink() {
-    const title = document.getElementById("title").value;
-    const url = document.getElementById("url").value;
-    const category = document.getElementById("category").value;
-    const sub = document.getElementById("subcategory").value;
+    const data = load();
+    data[c] ??= {};
+    data[c][s] ??= [];
 
-    if (!title || !url || !sub) return alert("Fill all fields");
+    if (editIndex.value) {
+      const [cat, sub, i] = editIndex.value.split("|");
+      data[cat][sub][i] = { title: t, url: u };
+      editIndex.value = "";
+    } else {
+      data[c][s].push({ title: t, url: u });
+    }
 
-    const data = getData();
-    data[category] = data[category] || {};
-    data[category][sub] = data[category][sub] || [];
-    data[category][sub].push({ title, url });
-
-    saveData(data);
+    save(data);
+    title.value = url.value = subcategory.value = "";
     render();
-    document.getElementById("title").value = "";
-    document.getElementById("url").value = "";
+  }
+
+  function editLink(cat, sub, i) {
+    const l = load()[cat][sub][i];
+    title.value = l.title;
+    url.value = l.url;
+    category.value = cat;
+    subcategory.value = sub;
+    editIndex.value = `${cat}|${sub}|${i}`;
+  }
+
+  function deleteLink(cat, sub, i) {
+    if (!confirm("Delete this link?")) return;
+    const data = load();
+    data[cat][sub].splice(i, 1);
+    save(data);
+    render();
   }
 
   function render() {
-    const data = getData();
-    const container = document.getElementById("links");
-    container.innerHTML = "";
+    const data = load();
+    const q = search.value.toLowerCase();
+    links.innerHTML = "";
 
     for (const cat in data) {
-      const h2 = document.createElement("h2");
-      h2.textContent = cat;
-      container.appendChild(h2);
-
       for (const sub in data[cat]) {
-        const h3 = document.createElement("h3");
-        h3.textContent = sub;
-        container.appendChild(h3);
+        const matches = data[cat][sub].filter(
+          l => l.title.toLowerCase().includes(q) || l.url.toLowerCase().includes(q)
+        );
+        if (!matches.length) continue;
 
-        const ul = document.createElement("ul");
-        data[cat][sub].forEach(l => {
-          const li = document.createElement("li");
-          li.innerHTML = `<a href="${l.url}" target="_blank">${l.title}</a>`;
-          ul.appendChild(li);
+        links.innerHTML += `<h3>${cat} / ${sub}</h3><ul>`;
+        matches.forEach((l, i) => {
+          links.innerHTML += `
+            <li>
+              <a href="${l.url}" target="_blank">${l.title}</a>
+              <button onclick="editLink('${cat}','${sub}',${i})">✏️</button>
+              <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
+            </li>`;
         });
-        container.appendChild(ul);
+        links.innerHTML += "</ul>";
       }
     }
   }
@@ -128,4 +151,3 @@
 
 </body>
 </html>
-``
