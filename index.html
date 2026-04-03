@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>ImportantLinks</title>
 <style>
-body{font-family:Arial;background:#f7f7f7;margin:20px;display:none}
+body{font-family:Arial;background:#f7f7f7;margin:20px}
 .container{display:flex;gap:20px}
 .links,.form{background:white;padding:15px;border-radius:8px;width:50%}
 ul{list-style:none;padding-left:15px}
@@ -13,11 +13,13 @@ a{color:#1a73e8;text-decoration:none}
 button{margin-left:6px;cursor:pointer}
 input,select{width:100%;padding:6px;margin-top:6px}
 .search{margin-bottom:10px}
+#error{color:red;margin-bottom:10px}
 </style>
 </head>
 <body>
 
 <h1>ImportantLinks</h1>
+<div id="error"></div>
 
 <div class="container">
   <div class="links">
@@ -40,20 +42,26 @@ input,select{width:100%;padding:6px;margin-top:6px}
 </div>
 
 <script>
-/************ CONFIG — CHANGE THESE ************/
+/************ CONFIG (CHANGE THESE) ************/
 const SITE_PASSWORD = "nasser123";
 const GITHUB_TOKEN = "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";
 const OWNER = "nasser-thabet";
-const REPO = "MyWebsite-Data";
+const REPO = "mywebsite-data";
 const FILE = "links.json";
 /*********************************************/
 
+const errorBox = document.getElementById("error");
+
 /************ PASSWORD ************/
-if (sessionStorage.getItem("ok")!=="1") {
-  if (prompt("Password:")!==SITE_PASSWORD) throw "Denied";
-  sessionStorage.setItem("ok","1");
-}
-document.body.style.display="block";
+(function(){
+  if (sessionStorage.getItem("unlocked")==="1") return;
+  const p = prompt("Password:");
+  if (p !== SITE_PASSWORD) {
+    errorBox.textContent = "Access denied: wrong password.";
+    return;
+  }
+  sessionStorage.setItem("unlocked","1");
+})();
 /*********************************/
 
 let data = {};
@@ -61,47 +69,51 @@ let sha = "";
 
 /************ LOAD ************/
 async function loadData() {
-  const r = await fetch(
-    `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
-    { headers:{ Authorization:`Bearer ${GITHUB_TOKEN}` } }
-  );
-  if (!r.ok) {
-    alert("Failed to load data from GitHub");
-    console.error(await r.text());
-    return;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
+      { headers:{ Authorization:`Bearer ${GITHUB_TOKEN}` } }
+    );
+
+    if (!r.ok) throw new Error(await r.text());
+
+    const j = await r.json();
+    sha = j.sha;
+    data = JSON.parse(atob(j.content));
+    render();
+  } catch (e) {
+    errorBox.textContent = "Failed to load data from GitHub.";
+    console.error(e);
   }
-  const j = await r.json();
-  sha = j.sha;
-  data = JSON.parse(atob(j.content));
-  render();
 }
 
 /************ SAVE ************/
 async function saveData() {
-  const r = await fetch(
-    `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
-    {
-      method:"PUT",
-      headers:{
-        Authorization:`Bearer ${GITHUB_TOKEN}`,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        message:"Update ImportantLinks",
-        content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),
-        sha
-      })
-    }
-  );
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
+      {
+        method:"PUT",
+        headers:{
+          Authorization:`Bearer ${GITHUB_TOKEN}`,
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          message:"Update ImportantLinks",
+          content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),
+          sha
+        })
+      }
+    );
 
-  const j = await r.json();
-  if (!r.ok) {
-    alert("GitHub save failed — see console");
-    console.error(j);
-    return;
+    if (!r.ok) throw new Error(await r.text());
+
+    const j = await r.json();
+    sha = j.content.sha;
+  } catch (e) {
+    errorBox.textContent = "Save failed. Check console.";
+    console.error(e);
   }
-
-  sha = j.content.sha;
 }
 
 /************ UI ************/
@@ -122,8 +134,8 @@ function saveLink() {
   }
 
   title.value=url.value=subcategory.value="";
-  render();      // immediate feedback
-  saveData();    // async GitHub write
+  render();
+  saveData();
 }
 
 function editLink(cat,sub,i){
@@ -160,4 +172,12 @@ function render(){
             <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
           </li>`;
       });
-      links.innerHTML+="</
+      links.innerHTML+="</ul>";
+    }
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
