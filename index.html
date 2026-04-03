@@ -1,34 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>ImportantLinks</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-      margin: 20px;
-      display: none;
-    }
-    h1 { text-align: center; }
-    .container { display: flex; gap: 20px; }
-    .links, .form {
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      width: 50%;
-    }
-    ul { list-style: none; padding-left: 15px; }
-    li { margin: 6px 0; }
-    a { color: #1a73e8; text-decoration: none; }
-    button { margin-left: 6px; cursor: pointer; }
-    input, select {
-      width: 100%;
-      padding: 6px;
-      margin-top: 6px;
-    }
-    .search { margin-bottom: 10px; }
-  </style>
+<meta charset="UTF-8">
+<title>ImportantLinks</title>
+<style>
+body { font-family: Arial; background:#f7f7f7; margin:20px; display:none; }
+.container { display:flex; gap:20px; }
+.links,.form { background:white; padding:15px; border-radius:8px; width:50%; }
+ul { list-style:none; padding-left:15px; }
+li { margin:6px 0; }
+a { color:#1a73e8; text-decoration:none; }
+button { margin-left:6px; cursor:pointer; }
+input,select { width:100%; padding:6px; margin-top:6px; }
+.search { margin-bottom:10px; }
+</style>
 </head>
 <body>
 
@@ -36,118 +21,133 @@
 
 <div class="container">
   <div class="links">
-    <input class="search" id="search" placeholder="Search links..." oninput="render()" />
+    <input class="search" id="search" placeholder="Search..." oninput="render()" />
     <div id="links"></div>
   </div>
 
   <div class="form">
     <h3>Add / Edit Link</h3>
-    <input id="title" placeholder="Link title" />
-    <input id="url" placeholder="https://example.com" />
+    <input id="title" placeholder="Title">
+    <input id="url" placeholder="https://example.com">
     <select id="category">
       <option>Work</option>
       <option>Personal</option>
     </select>
-    <input id="subcategory" placeholder="Subcategory" />
-    <input type="hidden" id="editIndex" />
+    <input id="subcategory" placeholder="Subcategory">
+    <input type="hidden" id="editKey">
     <button onclick="saveLink()">Save</button>
   </div>
 </div>
 
 <script>
-  /************ PASSWORD LOCK ************/
-  const SITE_PASSWORD = "Nasser123"; // 🔒 CHANGE THIS
+/************ CONFIG (CHANGE THESE) ************/
+const SITE_PASSWORD = "nasser123";
+const GITHUB_TOKEN = "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";
+const OWNER = "nasser-thabet";
+const REPO = "MyWebsite-data";
+const FILE = "links.json";
+/**********************************************/
 
-  if (sessionStorage.getItem("unlocked") !== "true") {
-    const pwd = prompt("Enter password:");
-    if (pwd !== SITE_PASSWORD) {
-      alert("Incorrect password");
-      document.body.innerHTML = "";
-      throw new Error("Access denied");
-    }
-    sessionStorage.setItem("unlocked", "true");
-  }
-  document.body.style.display = "block";
-  /****************************************/
+/************ PASSWORD LOCK ************/
+if (sessionStorage.getItem("unlocked") !== "true") {
+  const p = prompt("Password:");
+  if (p !== SITE_PASSWORD) { alert("Wrong password"); throw ""; }
+  sessionStorage.setItem("unlocked","true");
+}
+document.body.style.display="block";
+/****************************************/
 
-  const key = "importantLinks";
+let sha = "";
+let data = {};
 
-  function load() {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  }
-  function save(data) {
-    localStorage.setItem(key, JSON.stringify(data));
-  }
-
-  function saveLink() {
-    const t = title.value.trim();
-    const u = url.value.trim();
-    const c = category.value;
-    const s = subcategory.value.trim();
-    if (!t || !u || !s) return alert("Fill all fields");
-
-    const data = load();
-    data[c] ??= {};
-    data[c][s] ??= [];
-
-    if (editIndex.value) {
-      const [cat, sub, i] = editIndex.value.split("|");
-      data[cat][sub][i] = { title: t, url: u };
-      editIndex.value = "";
-    } else {
-      data[c][s].push({ title: t, url: u });
-    }
-
-    save(data);
-    title.value = url.value = subcategory.value = "";
-    render();
-  }
-
-  function editLink(cat, sub, i) {
-    const l = load()[cat][sub][i];
-    title.value = l.title;
-    url.value = l.url;
-    category.value = cat;
-    subcategory.value = sub;
-    editIndex.value = `${cat}|${sub}|${i}`;
-  }
-
-  function deleteLink(cat, sub, i) {
-    if (!confirm("Delete this link?")) return;
-    const data = load();
-    data[cat][sub].splice(i, 1);
-    save(data);
-    render();
-  }
-
-  function render() {
-    const data = load();
-    const q = search.value.toLowerCase();
-    links.innerHTML = "";
-
-    for (const cat in data) {
-      for (const sub in data[cat]) {
-        const matches = data[cat][sub].filter(
-          l => l.title.toLowerCase().includes(q) || l.url.toLowerCase().includes(q)
-        );
-        if (!matches.length) continue;
-
-        links.innerHTML += `<h3>${cat} / ${sub}</h3><ul>`;
-        matches.forEach((l, i) => {
-          links.innerHTML += `
-            <li>
-              <a href="${l.url}" target="_blank">${l.title}</a>
-              <button onclick="editLink('${cat}','${sub}',${i})">✏️</button>
-              <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
-            </li>`;
-        });
-        links.innerHTML += "</ul>";
-      }
-    }
-  }
-
+/************ GITHUB API ************/
+async function loadData() {
+  const res = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
+    { headers:{ Authorization:`Bearer ${GITHUB_TOKEN}` } }
+  );
+  const json = await res.json();
+  sha = json.sha;
+  data = JSON.parse(atob(json.content));
   render();
-</script>
+}
 
+async function saveData() {
+  await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
+    {
+      method:"PUT",
+      headers:{
+        Authorization:`Bearer ${GITHUB_TOKEN}`,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({
+        message:"Update links",
+        content:btoa(JSON.stringify(data,null,2)),
+        sha
+      })
+    }
+  );
+  loadData();
+}
+/****************************************/
+
+function saveLink() {
+  const t=title.value.trim(), u=url.value.trim();
+  const c=category.value, s=subcategory.value.trim();
+  if(!t||!u||!s) return alert("Fill all fields");
+
+  data[c] ??= {};
+  data[c][s] ??= [];
+
+  if(editKey.value){
+    const [cat,sub,i]=editKey.value.split("|");
+    data[cat][sub][i]={title:t,url:u};
+    editKey.value="";
+  } else {
+    data[c][s].push({title:t,url:u});
+  }
+  title.value=url.value=subcategory.value="";
+  saveData();
+}
+
+function editLink(cat,sub,i){
+  const l=data[cat][sub][i];
+  title.value=l.title; url.value=l.url;
+  category.value=cat; subcategory.value=sub;
+  editKey.value=`${cat}|${sub}|${i}`;
+}
+
+function deleteLink(cat,sub,i){
+  if(!confirm("Delete?")) return;
+  data[cat][sub].splice(i,1);
+  saveData();
+}
+
+function render(){
+  const q=search.value.toLowerCase();
+  links.innerHTML="";
+  for(const cat in data){
+    for(const sub in data[cat]){
+      const m=data[cat][sub].filter(
+        l=>l.title.toLowerCase().includes(q)||l.url.toLowerCase().includes(q)
+      );
+      if(!m.length) continue;
+      links.innerHTML+=`<h3>${cat} / ${sub}</h3><ul>`;
+      m.forEach((l,i)=>{
+        links.innerHTML+=`
+          <li>
+            <a href="${l.url}" target="_blank">${l.title}</a>
+            <button onclick="editLink('${cat}','${sub}',${i})">✏️</button>
+            <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
+          </li>`;
+      });
+      links.innerHTML+="</ul>";
+    }
+  }
+}
+
+loadData();
+</script>
 </body>
 </html>
