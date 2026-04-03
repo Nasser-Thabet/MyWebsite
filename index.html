@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <title>ImportantLinks</title>
 <style>
-body { font-family: Arial; background:#f7f7f7; margin:20px; display:none; }
-.container { display:flex; gap:20px; }
-.links,.form { background:white; padding:15px; border-radius:8px; width:50%; }
-ul { list-style:none; padding-left:15px; }
-li { margin:6px 0; }
-a { color:#1a73e8; text-decoration:none; }
-button { margin-left:6px; cursor:pointer; }
-input,select { width:100%; padding:6px; margin-top:6px; }
-.search { margin-bottom:10px; }
+body{font-family:Arial;background:#f7f7f7;margin:20px;display:none}
+.container{display:flex;gap:20px}
+.links,.form{background:white;padding:15px;border-radius:8px;width:50%}
+ul{list-style:none;padding-left:15px}
+li{margin:6px 0}
+a{color:#1a73e8;text-decoration:none}
+button{margin-left:6px;cursor:pointer}
+input,select{width:100%;padding:6px;margin-top:6px}
+.search{margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -21,7 +21,7 @@ input,select { width:100%; padding:6px; margin-top:6px; }
 
 <div class="container">
   <div class="links">
-    <input class="search" id="search" placeholder="Search..." oninput="render()" />
+    <input id="search" class="search" placeholder="Search…" oninput="render()" />
     <div id="links"></div>
   </div>
 
@@ -40,40 +40,45 @@ input,select { width:100%; padding:6px; margin-top:6px; }
 </div>
 
 <script>
-/************ CONFIG (CHANGE THESE) ************/
+/************ CONFIG — CHANGE THESE ************/
 const SITE_PASSWORD = "nasser123";
 const GITHUB_TOKEN = "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";
 const OWNER = "nasser-thabet";
-const REPO = "MyWebsite-data";
+const REPO = "MyWebSite-data";
 const FILE = "links.json";
-/**********************************************/
+/*********************************************/
 
-/************ PASSWORD LOCK ************/
-if (sessionStorage.getItem("unlocked") !== "true") {
-  const p = prompt("Password:");
-  if (p !== SITE_PASSWORD) { alert("Wrong password"); throw ""; }
-  sessionStorage.setItem("unlocked","true");
+/************ PASSWORD ************/
+if (sessionStorage.getItem("ok")!=="1") {
+  if (prompt("Password:")!==SITE_PASSWORD) throw "Denied";
+  sessionStorage.setItem("ok","1");
 }
 document.body.style.display="block";
-/****************************************/
+/*********************************/
 
-let sha = "";
 let data = {};
+let sha = "";
 
-/************ GITHUB API ************/
+/************ LOAD ************/
 async function loadData() {
-  const res = await fetch(
+  const r = await fetch(
     `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
     { headers:{ Authorization:`Bearer ${GITHUB_TOKEN}` } }
   );
-  const json = await res.json();
-  sha = json.sha;
-  data = JSON.parse(atob(json.content));
+  if (!r.ok) {
+    alert("Failed to load data from GitHub");
+    console.error(await r.text());
+    return;
+  }
+  const j = await r.json();
+  sha = j.sha;
+  data = JSON.parse(atob(j.content));
   render();
 }
 
+/************ SAVE ************/
 async function saveData() {
-  await fetch(
+  const r = await fetch(
     `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`,
     {
       method:"PUT",
@@ -82,45 +87,58 @@ async function saveData() {
         "Content-Type":"application/json"
       },
       body:JSON.stringify({
-        message:"Update links",
-        content:btoa(JSON.stringify(data,null,2)),
+        message:"Update ImportantLinks",
+        content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),
         sha
       })
     }
   );
-  loadData();
-}
-/****************************************/
 
+  const j = await r.json();
+  if (!r.ok) {
+    alert("GitHub save failed — see console");
+    console.error(j);
+    return;
+  }
+
+  sha = j.content.sha;
+}
+
+/************ UI ************/
 function saveLink() {
-  const t=title.value.trim(), u=url.value.trim();
-  const c=category.value, s=subcategory.value.trim();
+  const t=title.value.trim(), u=url.value.trim(), s=subcategory.value.trim();
+  const c=category.value;
   if(!t||!u||!s) return alert("Fill all fields");
 
   data[c] ??= {};
   data[c][s] ??= [];
 
-  if(editKey.value){
+  if (editKey.value) {
     const [cat,sub,i]=editKey.value.split("|");
     data[cat][sub][i]={title:t,url:u};
     editKey.value="";
   } else {
     data[c][s].push({title:t,url:u});
   }
+
   title.value=url.value=subcategory.value="";
-  saveData();
+  render();      // immediate feedback
+  saveData();    // async GitHub write
 }
 
 function editLink(cat,sub,i){
   const l=data[cat][sub][i];
-  title.value=l.title; url.value=l.url;
-  category.value=cat; subcategory.value=sub;
+  title.value=l.title;
+  url.value=l.url;
+  category.value=cat;
+  subcategory.value=sub;
   editKey.value=`${cat}|${sub}|${i}`;
 }
 
 function deleteLink(cat,sub,i){
   if(!confirm("Delete?")) return;
   data[cat][sub].splice(i,1);
+  render();
   saveData();
 }
 
@@ -142,12 +160,4 @@ function render(){
             <button onclick="deleteLink('${cat}','${sub}',${i})">🗑</button>
           </li>`;
       });
-      links.innerHTML+="</ul>";
-    }
-  }
-}
-
-loadData();
-</script>
-</body>
-</html>
+      links.innerHTML+="</
