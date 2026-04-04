@@ -4,21 +4,103 @@
   <meta charset="UTF-8" />
   <title>ImportantLinks</title>
 
-  <!-- Load Supabase ONCE -->
+  <!-- Supabase JS (UMD, global window.supabase) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    body { font-family: Arial; background:#f7f7f7; margin:20px; }
-    h1 { text-align:center; }
-    .container { display:flex; gap:20px; }
-    .links,.form { background:white; padding:15px; border-radius:8px; width:50%; }
-    ul { list-style:none; padding-left:15px; }
-    li { margin:6px 0; }
-    a { color:#1a73e8; text-decoration:none; }
-    button { margin-left:6px; cursor:pointer; }
-    input,select { width:100%; padding:6px; margin-top:6px; }
-    .search { margin-bottom:10px; }
-    #error { color:red; margin-bottom:10px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #error {
+      color: red;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    /* ===== TOP FORM ===== */
+    .form-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 25px;
+    }
+
+    .form {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      width: 420px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .form h3 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 6px;
+      margin-top: 6px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    /* ===== BOTTOM COLUMNS ===== */
+    .columns {
+      display: flex;
+      gap: 20px;
+    }
+
+    .column {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      width: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .column h2 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    .search {
+      margin-bottom: 10px;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 15px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    a {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+
+    .actions button {
+      margin-left: 6px;
+      width: auto;
+      padding: 2px 6px;
+    }
   </style>
 </head>
 
@@ -27,35 +109,51 @@
 <h1>ImportantLinks</h1>
 <div id="error"></div>
 
-<div class="container">
+<!-- ===== FORM ===== -->
+<div class="form-wrapper">
   <div class="form">
     <h3>Add / Edit Link</h3>
-    <input id="title" placeholder="Title">
-    <input id="url" placeholder="https://example.com">
+    <input id="title" placeholder="Title" />
+    <input id="url" placeholder="https://example.com" />
     <select id="category">
       <option>Work</option>
       <option>Personal</option>
     </select>
-    <input id="subcategory" placeholder="Subcategory">
-    <input type="hidden" id="editId">
+    <input id="subcategory" placeholder="Subcategory" />
+    <input type="hidden" id="editId" />
     <button onclick="saveLink()">Save</button>
   </div>
-    <div class="links">
-    <input id="search" class="search" placeholder="Search…" oninput="render()" />
-    <div id="links"></div>
+</div>
+
+<!-- ===== TWO COLUMNS ===== -->
+<div class="columns">
+
+  <!-- WORK COLUMN -->
+  <div class="column">
+    <h2>Work</h2>
+    <input id="workSearch" class="search" placeholder="Search work…" oninput="render()" />
+    <div id="workLinks"></div>
   </div>
+
+  <!-- PERSONAL COLUMN -->
+  <div class="column">
+    <h2>Personal</h2>
+    <input id="personalSearch" class="search" placeholder="Search personal…" oninput="render()" />
+    <div id="personalLinks"></div>
+  </div>
+
 </div>
 
 <script>
 /************ CONFIG ************/
-const SITE_PASSWORD = "nasser123";
-const SUPABASE_URL = "https://owvbotnkzekyotgzcbxs.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_X1s0toNlANVtRWxXHQt1xA_Wh_DRut4";
+const SITE_PASSWORD = "CHANGE_THIS_PASSWORD";
+const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR_PUBLIC_ANON_KEY";
 /********************************/
 
 const errorBox = document.getElementById("error");
 
-/************ PASSWORD ************/
+/************ PASSWORD LOCK ************/
 if (sessionStorage.getItem("unlocked") !== "1") {
   if (prompt("Enter password:") !== SITE_PASSWORD) {
     errorBox.textContent = "Access denied.";
@@ -63,16 +161,14 @@ if (sessionStorage.getItem("unlocked") !== "1") {
   }
   sessionStorage.setItem("unlocked","1");
 }
-/*********************************/
+/*************************************/
 
 /************ SUPABASE CLIENT ************/
-/* ✅ We do NOT declare `supabase`
-   ✅ We only use it to create `db` */
 const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
-/****************************************/
+/***************************************/
 
 let allLinks = [];
 
@@ -87,76 +183,97 @@ async function loadLinks() {
     errorBox.textContent = error.message;
     return;
   }
+
   allLinks = data;
   render();
 }
 
 /************ SAVE ************/
 async function saveLink() {
-  const t=title.value.trim();
-  const u=url.value.trim();
-  const s=subcategory.value.trim();
-  const c=category.value;
+  const t = title.value.trim();
+  const u = url.value.trim();
+  const s = subcategory.value.trim();
+  const c = category.value;
 
-  if (!t || !u || !s) return alert("Fill all fields");
-
-  if (editId.value) {
-    await db.from("links")
-      .update({ title:t, url:u, category:c, subcategory:s })
-      .eq("id", editId.value);
-    editId.value="";
-  } else {
-    await db.from("links")
-      .insert({ title:t, url:u, category:c, subcategory:s });
+  if (!t || !u || !s) {
+    alert("Fill all fields");
+    return;
   }
 
-  title.value=url.value=subcategory.value="";
+  if (editId.value) {
+    await db
+      .from("links")
+      .update({ title: t, url: u, category: c, subcategory: s })
+      .eq("id", editId.value);
+    editId.value = "";
+  } else {
+    await db
+      .from("links")
+      .insert({ title: t, url: u, category: c, subcategory: s });
+  }
+
+  title.value = "";
+  url.value = "";
+  subcategory.value = "";
+
   loadLinks();
 }
 
 /************ UI ************/
 function editLink(l) {
-  title.value=l.title;
-  url.value=l.url;
-  category.value=l.category;
-  subcategory.value=l.subcategory;
-  editId.value=l.id;
+  title.value = l.title;
+  url.value = l.url;
+  category.value = l.category;
+  subcategory.value = l.subcategory;
+  editId.value = l.id;
 }
 
 async function deleteLink(id) {
-  if (!confirm("Delete?")) return;
+  if (!confirm("Delete this link?")) return;
   await db.from("links").delete().eq("id", id);
   loadLinks();
 }
 
 function render() {
-  const q=search.value.toLowerCase();
-  links.innerHTML="";
+  const workQ = workSearch.value.toLowerCase();
+  const personalQ = personalSearch.value.toLowerCase();
 
-  const grouped={};
-  allLinks.forEach(l=>{
-    if (!l.title.toLowerCase().includes(q) &&
-        !l.url.toLowerCase().includes(q)) return;
+  workLinks.innerHTML = "";
+  personalLinks.innerHTML = "";
 
-    grouped[l.category] ??= {};
-    grouped[l.category][l.subcategory] ??= [];
-    grouped[l.category][l.subcategory].push(l);
-  });
+  function renderCategory(category, container, query) {
+    const grouped = {};
 
-  for (const cat in grouped) {
-    for (const sub in grouped[cat]) {
-      links.innerHTML += `<h3>${cat} / ${sub}</h3><ul>`;
-      grouped[cat][sub].forEach(l=>{
-        links.innerHTML += `
+    allLinks
+      .filter(l => l.category === category)
+      .forEach(l => {
+        if (
+          !l.title.toLowerCase().includes(query) &&
+          !l.url.toLowerCase().includes(query)
+        ) return;
+
+        grouped[l.subcategory] ??= [];
+        grouped[l.subcategory].push(l);
+      });
+
+    for (const sub in grouped) {
+      container.innerHTML += `<h4>${sub}</h4><ul>`;
+      grouped[sub].forEach(l => {
+        container.innerHTML += `
           <li>
             <a href="${l.url}" target="_blank">${l.title}</a>
-            <button onclick='editLink(${JSON.stringify(l)})'>✏️</button>
-            <button onclick='deleteLink("${l.id}")'>🗑</button>
+            <span class="actions">
+              <button onclick='editLink(${JSON.stringify(l)})'>✏️</button>
+              <button onclick='deleteLink("${l.id}")'>🗑</button>
+            </span>
           </li>`;
       });
-      links.innerHTML += "</ul>";
+      container.innerHTML += "</ul>";
     }
   }
+
+  renderCategory("Work", workLinks, workQ);
+  renderCategory("Personal", personalLinks, personalQ);
 }
 
 loadLinks();
